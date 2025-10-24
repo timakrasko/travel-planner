@@ -1,8 +1,14 @@
 package ua.sumdu.edu.traver_planner.api.dto
 
-import jakarta.validation.constraints.*
+import jakarta.validation.constraints.DecimalMax
+import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.Digits
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.PositiveOrZero
+import jakarta.validation.constraints.Size
 import java.math.BigDecimal
 import java.time.OffsetDateTime
+
 
 data class CreateLocationRequest(
     @field:NotBlank @field:Size(max = 200)
@@ -14,7 +20,8 @@ data class CreateLocationRequest(
     val longitude: BigDecimal? = null,
     val arrival_date: OffsetDateTime? = null,
     val departure_date: OffsetDateTime? = null,
-    @field:PositiveOrZero
+    @field:PositiveOrZero(message = "Budget must be positive or zero")
+    @field:Digits(integer = 8, fraction = 2, message = "Budget must have up to 2 decimal places") // <-- ДОДАНО
     val budget: BigDecimal? = null,
     val notes: String? = null,
 )
@@ -26,10 +33,11 @@ data class UpdateLocationRequest(
     val longitude: BigDecimal? = null,
     val arrival_date: OffsetDateTime? = null,
     val departure_date: OffsetDateTime? = null,
+    @field:PositiveOrZero(message = "Budget must be positive or zero")
+    @field:Digits(integer = 8, fraction = 2, message = "Budget must have up to 2 decimal places") // <-- ДОДАНО
     val budget: BigDecimal? = null,
     val notes: String? = null,
 )
-
 
 
 

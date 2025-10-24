@@ -1,5 +1,6 @@
 package ua.sumdu.edu.traver_planner.service
 
+import jakarta.persistence.EntityManager
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ua.sumdu.edu.traver_planner.api.dto.*
@@ -13,6 +14,7 @@ import java.util.UUID
 class TravelPlanService(
     private val plans: TravelPlanRepository,
     private val locations: LocationRepository,
+    private val entityManager: EntityManager,
 ) {
     fun listPlans(): List<TravelPlanDto> = plans.findAll().map { it.toDto() }
 
@@ -38,8 +40,13 @@ class TravelPlanService(
 
     @Transactional
     fun updatePlan(id: UUID, req: UpdateTravelPlanRequest): TravelPlanDto {
+        if (req.version <= 0) {
+            throw Validation("Version must be positive")
+        }
+
         val existing = plans.findWithOptimisticLock(id) ?: throw NotFound("Travel plan not found")
         if (existing.version != req.version) throw Conflict(existing.version)
+
         existing.apply {
             setIfNotNull(req.title) { title = it }
             setIfNotNull(req.description) { description = it }
@@ -49,7 +56,12 @@ class TravelPlanService(
             setIfNotNull(req.currency) { currency = it }
             setIfNotNull(req.is_public) { isPublic = it }
         }
-        return existing.toDto()
+
+        val saved = plans.save(existing)
+        entityManager.flush()       // Примусово записати в БД
+        entityManager.refresh(saved) // Перечитати з БД (оновить version)
+
+        return saved.toDto()
     }
 
     @Transactional
@@ -57,15 +69,12 @@ class TravelPlanService(
         if (!plans.existsById(id)) throw NotFound("Travel plan not found")
         plans.deleteById(id)
     }
-
-    // location operations moved to LocationService
 }
 
 class NotFound(message: String) : RuntimeException(message)
 class Validation(message: String) : RuntimeException(message)
 class Conflict(val currentVersion: Int) : RuntimeException("Conflict: Travel plan was modified by another user")
 
-// Mapping helpers
 private inline fun <T> setIfNotNull(value: T?, setter: (T) -> Unit) {
     if (value != null) setter(value)
 }
@@ -113,5 +122,7 @@ private fun Location.toDto() = LocationDto(
     notes = notes,
     created_at = createdAt,
 )
+
+
 
 

@@ -10,7 +10,8 @@ data class CreateTravelPlanRequest(
     val description: String? = null,
     val start_date: LocalDate? = null,
     val end_date: LocalDate? = null,
-    @field:PositiveOrZero
+    @field:PositiveOrZero(message = "Budget must be positive or zero")
+    @field:Digits(integer = 8, fraction = 2, message = "Budget must have up to 2 decimal places") // <-- ДОДАНО
     val budget: BigDecimal? = null,
     @field:Pattern(regexp = "^[A-Z]{3}$")
     val currency: String = "USD",
@@ -18,17 +19,17 @@ data class CreateTravelPlanRequest(
 )
 
 data class UpdateTravelPlanRequest(
-    @field:NotNull
     val version: Int,
     val title: String? = null,
     val description: String? = null,
     val start_date: LocalDate? = null,
     val end_date: LocalDate? = null,
+    @field:PositiveOrZero(message = "Budget must be positive or zero")
+    @field:Digits(integer = 8, fraction = 2, message = "Budget must have up to 2 decimal places") // <-- ДОДАНО
     val budget: BigDecimal? = null,
     val currency: String? = null,
     val is_public: Boolean? = null,
 )
-
 
 
 
