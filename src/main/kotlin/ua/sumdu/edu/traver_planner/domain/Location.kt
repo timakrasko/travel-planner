@@ -7,6 +7,7 @@ import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
+import jakarta.persistence.Version
 import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -51,6 +52,10 @@ class Location(
 
     @Column(name = "created_at")
     var createdAt: OffsetDateTime? = null,
+
+    @Version
+    @Column(name = "version")
+    var version: Int = 1,
 )
 
 

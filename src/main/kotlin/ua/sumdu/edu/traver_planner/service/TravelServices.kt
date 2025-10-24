@@ -121,6 +121,7 @@ private fun Location.toDto() = LocationDto(
     budget = budget,
     notes = notes,
     created_at = createdAt,
+    version = version,
 )
 
 

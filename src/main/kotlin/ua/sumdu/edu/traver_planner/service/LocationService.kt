@@ -38,6 +38,11 @@ class LocationService(
     @Transactional
     fun updateLocation(id: UUID, req: UpdateLocationRequest): LocationDto {
         val entity = locations.findById(id).orElseThrow { NotFound("Location not found") }
+
+        if (entity.version != req.version) {
+            throw Conflict(entity.version)
+        }
+
         req.name?.let { entity.name = it }
         if (req.arrival_date != null && req.departure_date != null && req.departure_date.isBefore(req.arrival_date)) {
             throw Validation("departure_date must be >= arrival_date")
@@ -78,6 +83,7 @@ private fun Location.toDto() = LocationDto(
     budget = budget,
     notes = notes,
     created_at = createdAt,
+    version = version
 )
 
 

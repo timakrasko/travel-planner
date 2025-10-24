@@ -4,6 +4,7 @@ import jakarta.validation.constraints.DecimalMax
 import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.Digits
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.PositiveOrZero
 import jakarta.validation.constraints.Size
 import java.math.BigDecimal
@@ -27,6 +28,8 @@ data class CreateLocationRequest(
 )
 
 data class UpdateLocationRequest(
+    @field:Positive(message = "Version must be positive")
+    val version: Int,
     val name: String? = null,
     val address: String? = null,
     val latitude: BigDecimal? = null,

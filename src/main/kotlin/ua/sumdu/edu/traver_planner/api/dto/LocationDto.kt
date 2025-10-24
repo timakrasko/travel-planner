@@ -6,6 +6,7 @@ import java.util.UUID
 
 data class LocationDto(
     val id: UUID,
+    val version: Int,
     val travel_plan_id: UUID,
     val name: String,
     val address: String?,
