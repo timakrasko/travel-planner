@@ -1,5 +1,6 @@
 package ua.sumdu.edu.traver_planner.service
 
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ua.sumdu.edu.traver_planner.api.dto.CreateLocationRequest
@@ -18,21 +19,35 @@ class LocationService(
     @Transactional
     fun addLocation(planId: UUID, req: CreateLocationRequest): LocationDto {
         val plan = plans.findById(planId).orElseThrow { NotFound("Travel plan not found") }
-        val entity = Location(
-            travelPlan = plan,
-            name = req.name,
-            address = req.address,
-            latitude = req.latitude,
-            longitude = req.longitude,
-            arrivalDate = req.arrival_date,
-            departureDate = req.departure_date,
-            budget = req.budget,
-            notes = req.notes,
-        )
-        if (entity.visitOrder == null) {
-            entity.visitOrder = locations.maxOrderForPlan(planId) + 1
+        var attempts = 3
+        while (attempts > 0) {
+            try {
+                val entity = Location(
+                    travelPlan = plan,
+                    name = req.name,
+                    address = req.address,
+                    latitude = req.latitude,
+                    longitude = req.longitude,
+                    arrivalDate = req.arrival_date,
+                    departureDate = req.departure_date,
+                    budget = req.budget,
+                    notes = req.notes,
+                )
+
+                if (entity.visitOrder == null) {
+                    entity.visitOrder = locations.maxOrderForPlan(planId) + 1
+                }
+
+                return locations.saveAndFlush(entity).toDto()
+
+            } catch (e: DataIntegrityViolationException) {
+                attempts--
+                if (attempts == 0) {
+                    throw e
+                }
+            }
         }
-        return locations.save(entity).toDto()
+        throw RuntimeException("Unexpected error during location creation")
     }
 
     @Transactional
