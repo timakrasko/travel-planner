@@ -71,7 +71,7 @@ class LocationService(
             setIfNotNull(req.budget) { budget = it }
             setIfNotNull(req.notes) { notes = it }
         }
-        return entity.toDto()
+        return locations.saveAndFlush(entity).toDto()
     }
 
     private inline fun <T> setIfNotNull(value: T?, setter: (T) -> Unit) {
