@@ -1,105 +1,106 @@
 package ua.sumdu.edu.traver_planner.service
 
-import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ua.sumdu.edu.traver_planner.api.dto.CreateLocationRequest
 import ua.sumdu.edu.traver_planner.api.dto.LocationDto
 import ua.sumdu.edu.traver_planner.api.dto.UpdateLocationRequest
+import ua.sumdu.edu.traver_planner.domain.Coordinates
 import ua.sumdu.edu.traver_planner.domain.Location
-import ua.sumdu.edu.traver_planner.repository.LocationRepository
+import ua.sumdu.edu.traver_planner.domain.Timing
 import ua.sumdu.edu.traver_planner.repository.TravelPlanRepository
+import java.time.OffsetDateTime
 import java.util.UUID
 
 @Service
 class LocationService(
-    private val locations: LocationRepository,
-    private val plans: TravelPlanRepository,
+    private val plans: TravelPlanRepository
 ) {
+
     @Transactional
     fun addLocation(planId: UUID, req: CreateLocationRequest): LocationDto {
-        val plan = plans.findById(planId).orElseThrow { NotFound("Travel plan not found") }
-        var attempts = 3
-        while (attempts > 0) {
-            try {
-                val entity = Location(
-                    travelPlan = plan,
-                    name = req.name,
-                    address = req.address,
-                    latitude = req.latitude,
-                    longitude = req.longitude,
-                    arrivalDate = req.arrival_date,
-                    departureDate = req.departure_date,
-                    budget = req.budget,
-                    notes = req.notes,
-                )
+        val planEntity = plans.findById(planId).orElseThrow { NotFound("Plan not found") }
 
-                if (entity.visitOrder == null) {
-                    entity.visitOrder = locations.maxOrderForPlan(planId) + 1
-                }
+        // Вираховуємо наступний порядок
+        val nextOrder = (planEntity.data.locations.maxOfOrNull { it.visitOrder ?: 0 } ?: 0) + 1
 
-                return locations.saveAndFlush(entity).toDto()
+        val newLocation = Location(
+            id = UUID.randomUUID(),
+            name = req.name,
+            address = req.address,
+            visitOrder = nextOrder,
+            coordinates = Coordinates(req.latitude, req.longitude),
+            timing = Timing(req.arrival_date, req.departure_date),
+            budget = req.budget,
+            notes = req.notes,
+            createdAt = OffsetDateTime.now()
+        )
 
-            } catch (e: DataIntegrityViolationException) {
-                attempts--
-                if (attempts == 0) {
-                    throw e
-                }
-            }
-        }
-        throw RuntimeException("Unexpected error during location creation")
+        // Додаємо в список
+        planEntity.data.locations.add(newLocation)
+        planEntity.data.meta?.updatedAt = OffsetDateTime.now() // Оновлюємо час зміни плану
+
+        plans.save(planEntity)
+
+        return newLocation.toDto(planId)
     }
 
     @Transactional
     fun updateLocation(id: UUID, req: UpdateLocationRequest): LocationDto {
-        val entity = locations.findById(id).orElseThrow { NotFound("Location not found") }
+        // Оскільки ми не знаємо PlanID, нам доведеться шукати план, який містить цю локацію.
+        // Це мінус JSON підходу, якщо ID локацій не індексовані.
+        // Але для простоти зробимо перебір (або використаємо нативний SQL, якщо це буде повільно).
 
-        if (entity.version != req.version) {
-            throw Conflict(entity.version)
+        // Знаходимо план, який має локацію з таким ID (завантажуємо всі плани - обережно на великих даних!)
+        // У продакшені тут має бути @Query з JSON оператором @>
+        val allPlans = plans.findAll()
+        val planEntity = allPlans.find { plan -> plan.data.locations.any { loc -> loc.id == id } }
+            ?: throw NotFound("Location not found")
+
+        val location = planEntity.data.locations.find { it.id == id }!!
+
+        // Оновлюємо поля
+        location.apply {
+            if (req.name != null) name = req.name
+            if (req.address != null) address = req.address
+            if (req.budget != null) budget = req.budget
+            if (req.notes != null) notes = req.notes
+
+            // Координати
+            if (req.latitude != null || req.longitude != null) {
+                coordinates = Coordinates(
+                    lat = req.latitude ?: coordinates?.lat,
+                    lng = req.longitude ?: coordinates?.lng
+                )
+            }
+
+            // Час
+            if (req.arrival_date != null || req.departure_date != null) {
+                timing = Timing(
+                    arrival = req.arrival_date ?: timing?.arrival,
+                    departure = req.departure_date ?: timing?.departure
+                )
+            }
         }
 
-        req.name?.let { entity.name = it }
-        if (req.arrival_date != null && req.departure_date != null && req.departure_date.isBefore(req.arrival_date)) {
-            throw Validation("departure_date must be >= arrival_date")
-        }
-        entity.apply {
-            setIfNotNull(req.address) { address = it }
-            setIfNotNull(req.latitude) { latitude = it }
-            setIfNotNull(req.longitude) { longitude = it }
-            setIfNotNull(req.arrival_date) { arrivalDate = it }
-            setIfNotNull(req.departure_date) { departureDate = it }
-            setIfNotNull(req.budget) { budget = it }
-            setIfNotNull(req.notes) { notes = it }
-        }
-        return locations.saveAndFlush(entity).toDto()
-    }
+        planEntity.data.meta?.updatedAt = OffsetDateTime.now()
+        plans.save(planEntity)
 
-    private inline fun <T> setIfNotNull(value: T?, setter: (T) -> Unit) {
-        if (value != null) setter(value)
+        return location.toDto(planEntity.id)
     }
 
     @Transactional
     fun deleteLocation(id: UUID) {
-        if (!locations.existsById(id)) throw NotFound("Location not found")
-        locations.deleteById(id)
+        val allPlans = plans.findAll()
+        val planEntity = allPlans.find { plan -> plan.data.locations.any { loc -> loc.id == id } }
+            ?: throw NotFound("Location not found")
+
+        planEntity.data.locations.removeIf { it.id == id }
+        planEntity.data.meta?.updatedAt = OffsetDateTime.now()
+
+        plans.save(planEntity)
     }
 }
-
-private fun Location.toDto() = LocationDto(
-    id = id,
-    travel_plan_id = travelPlan.id,
-    name = name,
-    address = address,
-    latitude = latitude,
-    longitude = longitude,
-    visit_order = visitOrder,
-    arrival_date = arrivalDate,
-    departure_date = departureDate,
-    budget = budget,
-    notes = notes,
-    created_at = createdAt,
-    version = version
-)
 
 
 

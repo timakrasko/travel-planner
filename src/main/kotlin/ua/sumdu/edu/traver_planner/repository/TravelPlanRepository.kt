@@ -6,14 +6,12 @@ import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
-import ua.sumdu.edu.traver_planner.domain.TravelPlan
+import ua.sumdu.edu.traver_planner.api.dto.TravelPlanEntity
 import java.util.UUID
 
-@Repository
-interface TravelPlanRepository : JpaRepository<TravelPlan, UUID> {
-    @Lock(LockModeType.OPTIMISTIC)
-    @Query("select p from TravelPlan p where p.id = :id")
-    fun findWithOptimisticLock(@Param("id") id: UUID): TravelPlan?
+interface TravelPlanRepository : JpaRepository<TravelPlanEntity, UUID> {
+    @Query(value = "SELECT * FROM travel_plans WHERE data->>'title' ILIKE %:title%", nativeQuery = true)
+    fun searchByTitle(title: String): List<TravelPlanEntity>
 }
 
 

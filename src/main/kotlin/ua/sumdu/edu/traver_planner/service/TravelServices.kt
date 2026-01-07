@@ -3,64 +3,90 @@ package ua.sumdu.edu.traver_planner.service
 import jakarta.persistence.EntityManager
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import ua.sumdu.edu.traver_planner.api.dto.*
+import ua.sumdu.edu.traver_planner.api.dto.BudgetInfo
+import ua.sumdu.edu.traver_planner.api.dto.CreateTravelPlanRequest
+import ua.sumdu.edu.traver_planner.api.dto.DateRange
+import ua.sumdu.edu.traver_planner.api.dto.LocationDto
+import ua.sumdu.edu.traver_planner.api.dto.MetaInfo
+import ua.sumdu.edu.traver_planner.api.dto.TravelPlanData
+import ua.sumdu.edu.traver_planner.api.dto.TravelPlanDetailsDto
+import ua.sumdu.edu.traver_planner.api.dto.TravelPlanDto
+import ua.sumdu.edu.traver_planner.api.dto.TravelPlanEntity
+import ua.sumdu.edu.traver_planner.api.dto.UpdateTravelPlanRequest
 import ua.sumdu.edu.traver_planner.domain.Location
-import ua.sumdu.edu.traver_planner.domain.TravelPlan
-import ua.sumdu.edu.traver_planner.repository.LocationRepository
 import ua.sumdu.edu.traver_planner.repository.TravelPlanRepository
+import java.time.OffsetDateTime
 import java.util.UUID
 
 @Service
 class TravelPlanService(
     private val plans: TravelPlanRepository,
-    private val locations: LocationRepository,
-    private val entityManager: EntityManager,
+    private val entityManager: EntityManager
 ) {
     fun listPlans(): List<TravelPlanDto> = plans.findAll().map { it.toDto() }
 
     fun getPlanDetails(id: UUID): TravelPlanDetailsDto {
-        val plan = plans.findById(id).orElseThrow { NotFound("Travel plan not found") }
-        val locs = locations.findByTravelPlanIdOrderByVisitOrderAsc(id)
-        return plan.toDetailsDto(locs)
+        val entity = plans.findById(id).orElseThrow { NotFound("Travel plan not found") }
+        return entity.toDetailsDto()
     }
 
     @Transactional
     fun createPlan(req: CreateTravelPlanRequest): TravelPlanDto {
-        val plan = TravelPlan(
+        val now = OffsetDateTime.now()
+
+        // Створюємо структуру даних JSON
+        val data = TravelPlanData(
+            id = UUID.randomUUID(),
             title = req.title,
             description = req.description,
-            startDate = req.start_date,
-            endDate = req.end_date,
-            budget = req.budget,
-            currency = req.currency,
             isPublic = req.is_public,
+            dates = DateRange(req.start_date, req.end_date),
+            budgetInfo = BudgetInfo(req.budget, req.currency),
+            meta = MetaInfo(createdAt = now, updatedAt = now, version = 1),
+            locations = mutableListOf()
         )
-        return plans.save(plan).toDto()
+
+        // Зберігаємо в БД
+        val entity = TravelPlanEntity(id = data.id, data = data)
+        return plans.save(entity).toDto()
     }
 
     @Transactional
     fun updatePlan(id: UUID, req: UpdateTravelPlanRequest): TravelPlanDto {
-        if (req.version <= 0) {
-            throw Validation("Version must be positive")
+        val entity = plans.findById(id).orElseThrow { NotFound("Travel plan not found") }
+
+        // Перевірка версії (оптимістичне блокування)
+        if (entity.version != req.version) {
+            throw Conflict(entity.version)
         }
 
-        val existing = plans.findWithOptimisticLock(id) ?: throw NotFound("Travel plan not found")
-        if (existing.version != req.version) throw Conflict(existing.version)
-
-        existing.apply {
+        // Оновлюємо поля JSON об'єкта
+        entity.data.apply {
             setIfNotNull(req.title) { title = it }
             setIfNotNull(req.description) { description = it }
-            setIfNotNull(req.start_date) { startDate = it }
-            setIfNotNull(req.end_date) { endDate = it }
-            setIfNotNull(req.budget) { budget = it }
-            setIfNotNull(req.currency) { currency = it }
             setIfNotNull(req.is_public) { isPublic = it }
+
+            // Оновлення дат
+            if (req.start_date != null || req.end_date != null) {
+                dates = DateRange(
+                    start = req.start_date ?: dates?.start,
+                    end = req.end_date ?: dates?.end
+                )
+            }
+
+            // Оновлення бюджету
+            if (req.budget != null || req.currency != null) {
+                budgetInfo = BudgetInfo(
+                    amount = req.budget ?: budgetInfo?.amount,
+                    currency = req.currency ?: budgetInfo?.currency ?: "USD"
+                )
+            }
+
+            // Оновлення метаданих
+            meta?.updatedAt = OffsetDateTime.now()
         }
 
-        val saved = plans.save(existing)
-        entityManager.flush()       // Примусово записати в БД
-        entityManager.refresh(saved) // Перечитати з БД (оновить version)
-
+        val saved = plans.save(entity)
         return saved.toDto()
     }
 
@@ -71,57 +97,60 @@ class TravelPlanService(
     }
 }
 
+// Допоміжні класи винятків
 class NotFound(message: String) : RuntimeException(message)
 class Validation(message: String) : RuntimeException(message)
-class Conflict(val currentVersion: Int) : RuntimeException("Conflict: Travel plan was modified by another user")
+class Conflict(val currentVersion: Int) : RuntimeException("Conflict detected")
 
 private inline fun <T> setIfNotNull(value: T?, setter: (T) -> Unit) {
     if (value != null) setter(value)
 }
 
-private fun TravelPlan.toDto() = TravelPlanDto(
+// --- MAPPERS (Перетворювачі) ---
+
+private fun TravelPlanEntity.toDto() = TravelPlanDto(
     id = id,
-    title = title,
-    description = description,
-    start_date = startDate,
-    end_date = endDate,
-    budget = budget,
-    currency = currency,
-    is_public = isPublic,
+    title = data.title,
+    description = data.description,
+    start_date = data.dates?.start,
+    end_date = data.dates?.end,
+    budget = data.budgetInfo?.amount,
+    currency = data.budgetInfo?.currency ?: "USD",
+    is_public = data.isPublic,
     version = version,
-    created_at = createdAt,
-    updated_at = updatedAt,
+    created_at = data.meta?.createdAt,
+    updated_at = data.meta?.updatedAt,
 )
 
-private fun TravelPlan.toDetailsDto(locs: List<Location>) = TravelPlanDetailsDto(
+private fun TravelPlanEntity.toDetailsDto() = TravelPlanDetailsDto(
     id = id,
-    title = title,
-    description = description,
-    start_date = startDate,
-    end_date = endDate,
-    budget = budget,
-    currency = currency,
-    is_public = isPublic,
+    title = data.title,
+    description = data.description,
+    start_date = data.dates?.start,
+    end_date = data.dates?.end,
+    budget = data.budgetInfo?.amount,
+    currency = data.budgetInfo?.currency ?: "USD",
+    is_public = data.isPublic,
     version = version,
-    created_at = createdAt,
-    updated_at = updatedAt,
-    locations = locs.map { it.toDto() },
+    created_at = data.meta?.createdAt,
+    updated_at = data.meta?.updatedAt,
+    locations = data.locations.map { it.toDto(this.id) }
 )
 
-private fun Location.toDto() = LocationDto(
+fun Location.toDto(planId: UUID) = LocationDto(
     id = id,
-    travel_plan_id = travelPlan.id,
+    travel_plan_id = planId,
     name = name,
     address = address,
-    latitude = latitude,
-    longitude = longitude,
+    latitude = coordinates?.lat,
+    longitude = coordinates?.lng,
     visit_order = visitOrder,
-    arrival_date = arrivalDate,
-    departure_date = departureDate,
+    arrival_date = timing?.arrival,
+    departure_date = timing?.departure,
     budget = budget,
     notes = notes,
     created_at = createdAt,
-    version = version,
+    version = 1 // Локації тепер не мають окремої версії, використовуємо 1 або версію плану
 )
 
 
