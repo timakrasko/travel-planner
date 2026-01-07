@@ -14,7 +14,6 @@ import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.util.UUID
 
-// Це тепер просто POJO (звичайний об'єкт), а не Entity
 data class Location(
     var id: UUID = UUID.randomUUID(),
     var name: String,

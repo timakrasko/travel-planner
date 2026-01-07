@@ -10,7 +10,6 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.UUID
 
-// Цей клас відповідає таблиці в БД
 @Entity
 @Table(name = "travel_plans")
 class TravelPlanEntity(
@@ -18,7 +17,6 @@ class TravelPlanEntity(
     @Column(name = "id")
     var id: UUID = UUID.randomUUID(),
 
-    // ВАЖЛИВО: name = "data", а не "locations"
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "data", columnDefinition = "jsonb")
     var data: TravelPlanData,
@@ -28,7 +26,6 @@ class TravelPlanEntity(
     var version: Int = 1
 )
 
-// Цей клас описує структуру JSON всередині колонки 'data'
 data class TravelPlanData(
     var id: UUID,
     var title: String,
@@ -37,7 +34,6 @@ data class TravelPlanData(
     @JsonProperty("is_public")
     var isPublic: Boolean = false,
 
-    // Групуємо дати, як у вашому SQL
     var dates: DateRange? = null,
 
     @JsonProperty("budget_info")
@@ -45,7 +41,6 @@ data class TravelPlanData(
 
     var meta: MetaInfo? = null,
 
-    // Локації тепер тут
     var locations: MutableList<Location> = mutableListOf()
 )
 

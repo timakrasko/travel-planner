@@ -34,7 +34,6 @@ class TravelPlanService(
     fun createPlan(req: CreateTravelPlanRequest): TravelPlanDto {
         val now = OffsetDateTime.now()
 
-        // Створюємо структуру даних JSON
         val data = TravelPlanData(
             id = UUID.randomUUID(),
             title = req.title,
@@ -46,7 +45,6 @@ class TravelPlanService(
             locations = mutableListOf()
         )
 
-        // Зберігаємо в БД
         val entity = TravelPlanEntity(id = data.id, data = data)
         return plans.save(entity).toDto()
     }
@@ -55,18 +53,15 @@ class TravelPlanService(
     fun updatePlan(id: UUID, req: UpdateTravelPlanRequest): TravelPlanDto {
         val entity = plans.findById(id).orElseThrow { NotFound("Travel plan not found") }
 
-        // Перевірка версії (оптимістичне блокування)
         if (entity.version != req.version) {
             throw Conflict(entity.version)
         }
 
-        // Оновлюємо поля JSON об'єкта
         entity.data.apply {
             setIfNotNull(req.title) { title = it }
             setIfNotNull(req.description) { description = it }
             setIfNotNull(req.is_public) { isPublic = it }
 
-            // Оновлення дат
             if (req.start_date != null || req.end_date != null) {
                 dates = DateRange(
                     start = req.start_date ?: dates?.start,
@@ -74,7 +69,6 @@ class TravelPlanService(
                 )
             }
 
-            // Оновлення бюджету
             if (req.budget != null || req.currency != null) {
                 budgetInfo = BudgetInfo(
                     amount = req.budget ?: budgetInfo?.amount,
@@ -82,7 +76,6 @@ class TravelPlanService(
                 )
             }
 
-            // Оновлення метаданих
             meta?.updatedAt = OffsetDateTime.now()
         }
 
@@ -97,7 +90,6 @@ class TravelPlanService(
     }
 }
 
-// Допоміжні класи винятків
 class NotFound(message: String) : RuntimeException(message)
 class Validation(message: String) : RuntimeException(message)
 class Conflict(val currentVersion: Int) : RuntimeException("Conflict detected")
@@ -106,7 +98,6 @@ private inline fun <T> setIfNotNull(value: T?, setter: (T) -> Unit) {
     if (value != null) setter(value)
 }
 
-// --- MAPPERS (Перетворювачі) ---
 
 private fun TravelPlanEntity.toDto() = TravelPlanDto(
     id = id,
@@ -150,7 +141,7 @@ fun Location.toDto(planId: UUID) = LocationDto(
     budget = budget,
     notes = notes,
     created_at = createdAt,
-    version = 1 // Локації тепер не мають окремої версії, використовуємо 1 або версію плану
+    version = 1
 )
 
 

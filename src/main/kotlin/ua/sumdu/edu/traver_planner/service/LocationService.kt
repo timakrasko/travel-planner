@@ -47,26 +47,18 @@ class LocationService(
 
     @Transactional
     fun updateLocation(id: UUID, req: UpdateLocationRequest): LocationDto {
-        // Оскільки ми не знаємо PlanID, нам доведеться шукати план, який містить цю локацію.
-        // Це мінус JSON підходу, якщо ID локацій не індексовані.
-        // Але для простоти зробимо перебір (або використаємо нативний SQL, якщо це буде повільно).
-
-        // Знаходимо план, який має локацію з таким ID (завантажуємо всі плани - обережно на великих даних!)
-        // У продакшені тут має бути @Query з JSON оператором @>
         val allPlans = plans.findAll()
         val planEntity = allPlans.find { plan -> plan.data.locations.any { loc -> loc.id == id } }
             ?: throw NotFound("Location not found")
 
         val location = planEntity.data.locations.find { it.id == id }!!
 
-        // Оновлюємо поля
         location.apply {
             if (req.name != null) name = req.name
             if (req.address != null) address = req.address
             if (req.budget != null) budget = req.budget
             if (req.notes != null) notes = req.notes
 
-            // Координати
             if (req.latitude != null || req.longitude != null) {
                 coordinates = Coordinates(
                     lat = req.latitude ?: coordinates?.lat,
@@ -74,7 +66,6 @@ class LocationService(
                 )
             }
 
-            // Час
             if (req.arrival_date != null || req.departure_date != null) {
                 timing = Timing(
                     arrival = req.arrival_date ?: timing?.arrival,

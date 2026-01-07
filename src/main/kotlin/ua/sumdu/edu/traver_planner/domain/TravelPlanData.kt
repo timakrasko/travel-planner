@@ -4,18 +4,16 @@ import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
-// Це чистий Kotlin об'єкт, без анотацій @Entity
 data class TravelPlanData(
     var title: String,
     var description: String? = null,
     var isPublic: Boolean = false,
 
-    // Групи полів з вашого SQL скрипта
     var dates: DateRange? = null,
     var budgetInfo: BudgetInfo? = null,
     var meta: MetaInfo? = null,
 
-    var locations: List<Location> = emptyList() // Ваш клас Location з минулої відповіді
+    var locations: List<Location> = emptyList()
 )
 
 data class DateRange(
